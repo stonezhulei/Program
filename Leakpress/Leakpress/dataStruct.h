@@ -96,6 +96,7 @@ typedef struct ATEQ_EVENT
 
 typedef struct RESULT
 {
+	UINT ready;
 	UINT wTestStep;
 	UINT wLeakPress;
 	UINT wLeakValue;
@@ -105,6 +106,7 @@ typedef struct RESULT
 	uint8_t fileName[6];
 	void operator = (RESULT r)
 	{
+		ready = r.ready;
 		wTestStep = r.wTestStep;
 		wLeakPress = r.wLeakPress;
 		wLeakValue = r.wLeakValue;

@@ -394,54 +394,53 @@ void CLeakpressDlg::setResult(int id, RESULT *r)
 
 void CLeakpressDlg::SendResult(int id)
 {
-	if (id == 0 || id == 1)
-	{
-		RESULT r = getResult(id);
+	RESULT r = getResult(id);
 
-		CTime curTime = CTime::GetCurrentTime();
-		//CString csCurTime = curTime.Format("%Y-%m-%d %H:%M:%S");
-		CString dateString = curTime.Format("%m%d");
-		CString fileName = para.prefix[id] + dateString;
-		memcpy(r.fileName, fileName, 6);
+	CTime curTime = CTime::GetCurrentTime();
+	CString csCurTime = curTime.Format("%Y-%m-%d %H:%M:%S");
+	CString dateString = curTime.Format("%m%d");
+	CString fileName = para.prefix[id] + dateString;
+	memcpy(r.fileName, fileName, 6);
 
+	//// 等待数据获取成功
+	//while (!r.ready) {
+	//	Sleep(100);
+	//	r = getResult(id);
+	//}
+
+	//r.ready = FALSE;
+
+	if (id == 0 || id == 1) {
 		pthread_mutex_lock(&plc_mutex);
 		fins->WriteDM((uint16_t)addr[id].address[0], (uint16_t)(10));
-		fins->WriteDM((uint16_t)addr[id].address[2], (uint16_t)(r.wLeakPress / 10));
-		fins->WriteDM((uint16_t)addr[id].address[3], (uint16_t)(r.wLeakValue / 100));
-		fins->WriteDM((uint16_t)addr[id].address[6], r.fileName, 6);
-
+		fins->WriteDM((uint16_t)addr[id].address[1], (uint16_t)(r.wLeakPress));
+		fins->WriteDM((uint16_t)addr[id].address[2], (uint16_t)(r.wLeakValue));
+		fins->WriteDM((uint16_t)addr[id].address[3], r.fileName, 6);
 		pthread_mutex_unlock(&plc_mutex);
 
 		setResult(id, &r);
-		WriteResultToFile(para.dir, para.prefix[id], r);
+		WriteResultToFile(para.dir, para.prefix[id], csCurTime, r);
 	}
 	else {
-		RESULT r = getResult(id);
-
-		CTime curTime = CTime::GetCurrentTime();
-		//CString csCurTime = curTime.Format("%Y-%m-%d %H:%M:%S");
-		CString dateString = curTime.Format("%m%d");
-		CString fileName = para.prefix[id] + dateString;
-		memcpy(r.fileName, fileName, 6);
-
 		pthread_mutex_lock(&plc_mutex);
 		fins->WriteDM((uint16_t)addr[id].address[0], (uint16_t)(10));
 		fins->WriteDM((uint16_t)addr[id].address[2], (uint16_t)(r.wLeakPress / 10));
 		fins->WriteDM((uint16_t)addr[id].address[3], (uint16_t)(r.wLeakValue / 100));
 		fins->WriteDM((uint16_t)addr[id].address[6], r.fileName, 6);
 
+		// 读取 P1 P2
 		WORD urData = 0xff;
 		fins->ReadDM((uint16_t)addr[id].address[7], urData); r.wTestPress1 = urData * 10;
 		fins->ReadDM((uint16_t)addr[id].address[8], urData); r.wTestPress2 = urData * 10;
 		pthread_mutex_unlock(&plc_mutex);
 
 		setResult(id, &r);
-		WriteResultToFile(para.dir, para.prefix[id], r);
+		WriteResultToFile(para.dir, para.prefix[id], csCurTime, r);
 	}
 
 }
 
-void CLeakpressDlg::WriteResultToFile(CString dir, CString fileName, RESULT r)
+void CLeakpressDlg::WriteResultToFile(CString dir, CString fileName, CString dt, RESULT r)
 {
 	long total_lines = 1;
 	CString lineString;
@@ -461,9 +460,9 @@ void CLeakpressDlg::WriteResultToFile(CString dir, CString fileName, RESULT r)
 	CString temp;	
 	temp.Format("%d, ", total_lines);
 	lineString.Append(temp);
-	lineString.Append(fileName.Left(2));
+	lineString.Append(dt);
 	lineString.Append(", ");
-	lineString.Append(fileName.Right(4));
+	lineString.Append(fileName);
 	temp.Format(", %ld, %ld, %ld, %ld, %d\n", r.wLeakPress, r.wLeakValue, r.wTestPress1, r.wTestPress2, r.wTestPress1 - r.wTestPress2);
 	lineString.Append(temp);
 
@@ -564,6 +563,7 @@ afx_msg LRESULT CLeakpressDlg::OnAteqEventMsg(WPARAM wParam, LPARAM lParam)
 	case ATEQ_RESULT_1:
 		r.wLeakPress = e->press;
 		r.wLeakValue = e->leak;
+		r.ready = TRUE;
 		break;
 	case ATEQ_ERROR_1:
 		break;
@@ -632,44 +632,43 @@ void CLeakpressDlg::OnTest(int id, bool bstart, bool isAteqLow)
 	printf("====start %d====\n", id + 1);
 	ResetAteqState(id);
 
-	// 2.等待 2 段稳压
-	do {
-		QueryAteqTest(id);
-		Sleep(100);
-	} while (IsAteqStateMatch(id, ATEQ_REST));
-
-	// 3.等待 2 段稳压结束
-	bool error = true;
-	while (IsAteqStateMatch(id, ATEQ_STABLE_1)) {
-		QueryAteqTest(id);
-		error = false;
-		Sleep(100);
-	}
-
-	if (error) {
-		puts("2 段漏气");
-		return;
-	}
-	else {
-		puts("====2 段稳压结束====");
-		//Sleep(1000);
-	}
-
-	while (!IsAteqStateMatch(id, ATEQ_TEST_1, false)) {
-		QueryAteqTest(id);
-		Sleep(100);
-	}
-
-	puts("====查询2 段结果====");
-
-	// 4.查询 2 段结果
-	do {
-		QueryAteqResult(id);
-		Sleep(100);
-	} while (!IsAteqStateMatch(id, ATEQ_RESULT_1, false));
-
-
 	if (isAteqLow) {
+		// 2.等待 2 段稳压
+		do {
+			QueryAteqTest(id);
+			Sleep(100);
+		} while (IsAteqStateMatch(id, ATEQ_REST));
+
+		// 3.等待 2 段稳压结束
+		bool error = true;
+		while (IsAteqStateMatch(id, ATEQ_STABLE_1)) {
+			QueryAteqTest(id);
+			error = false;
+			Sleep(100);
+		}
+
+		if (error) {
+			puts("2 段漏气");
+			return;
+		}
+		else {
+			puts("====2 段稳压结束====");
+			//Sleep(1000);
+		}
+
+		while (!IsAteqStateMatch(id, ATEQ_TEST_1, false)) {
+			QueryAteqTest(id);
+			Sleep(100);
+		}
+
+		puts("====查询2 段结果====");
+
+		// 4.查询 2 段结果
+		do {
+			QueryAteqResult(id);
+			Sleep(100);
+		} while (!IsAteqStateMatch(id, ATEQ_RESULT_1, false));
+
 		puts("等待 3 段稳压");
 
 		// 5. 等待 3 段稳压
@@ -741,7 +740,7 @@ UINT WINAPI Thread1(LPVOID pParam)
 	bool bstart = false;
 	while (!pDlg->m_flagThreadExit)
 	{
-		pMain->OnTest(id, bstart, false);
+		//pMain->OnTest(id, bstart, false);
 	}
 
 	pDlg->m_flagThreadStart = false;

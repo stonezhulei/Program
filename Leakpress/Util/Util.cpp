@@ -8,7 +8,7 @@ using namespace std;
 
 namespace Util
 {
-vector<CString> SpiltString(CString mStr,char mFistChar)
+vector<CString> SpiltString(CString mStr, char mFistChar)
 {
 	vector<CString> mResultVec;
 	while (mStr.GetLength()>0)
@@ -36,7 +36,7 @@ vector<CString> SpiltString(CString mStr,char mFistChar)
 	return mResultVec;
 }
 
-vector<CString> SpiltString(CString mStr,char mFistChar,char mSencodChar)
+vector<CString> SpiltString(CString mStr, char mFistChar, char mSencodChar)
 {
 	vector<CString> mResultVec;
 	if(mStr.GetLength()<=0)
