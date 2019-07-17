@@ -72,7 +72,7 @@ public:
 	RESULT getResult(int id);
 	void setResult(int id, RESULT *r);
 
-	void WriteResultToFile(CString dir, CString fileName, CString dt, RESULT r);
+	void WriteResultToFile(CString dir, CString fileName, CString dt, RESULT r, bool isLow);
 
 private:
 	Fins *fins;

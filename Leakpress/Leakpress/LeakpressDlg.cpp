@@ -416,10 +416,14 @@ void CLeakpressDlg::SendResult(int id)
 		fins->WriteDM((uint16_t)addr[id].address[1], (uint16_t)(r.wLeakPress));
 		fins->WriteDM((uint16_t)addr[id].address[2], (uint16_t)(r.wLeakValue));
 		fins->WriteDM((uint16_t)addr[id].address[3], r.fileName, 6);
+		
+		// ¶ÁÈ¡ Workpress
+		WORD urData = 0;
+		fins->ReadDM((uint16_t)addr[id].address[4], urData); r.wWorkPress = urData * 1000;
 		pthread_mutex_unlock(&plc_mutex);
 
 		setResult(id, &r);
-		WriteResultToFile(para.dir, para.prefix[id], csCurTime, r);
+		WriteResultToFile(para.dir, fileName, csCurTime, r, false);
 	}
 	else {
 		pthread_mutex_lock(&plc_mutex);
@@ -435,15 +439,22 @@ void CLeakpressDlg::SendResult(int id)
 		pthread_mutex_unlock(&plc_mutex);
 
 		setResult(id, &r);
-		WriteResultToFile(para.dir, para.prefix[id], csCurTime, r);
+		WriteResultToFile(para.dir, fileName, csCurTime, r, true);
 	}
 
 }
 
-void CLeakpressDlg::WriteResultToFile(CString dir, CString fileName, CString dt, RESULT r)
+void CLeakpressDlg::WriteResultToFile(CString dir, CString fileName, CString dt, RESULT r, bool isLow)
 {
 	long total_lines = 1;
 	CString lineString;
+
+	if (isLow) {
+		dir += "\\LowLeakpress";
+	}
+	else {
+		dir += "\\HighLeakpress";
+	}
 
 	if (0 != access(dir, 0))   //if the floder not exits,create a new one
 	{
@@ -452,7 +463,13 @@ void CLeakpressDlg::WriteResultToFile(CString dir, CString fileName, CString dt,
 
 	CString path = dir + "\\" + fileName + ".csv";
 	if (!FileManager::CheckFileExist(path)) {
-		lineString.Append("NO, DATETIME, TYPE, PRESS, LEAK, P1, P2, P1-P2\n");
+		lineString.Append("NO, DATETIME, TYPE, PRESS, LEAK");
+		if (isLow) {
+			lineString.Append(", P1, P2, P1 - P2\n");
+		}
+		else {
+			lineString.Append(", Workpress\n");
+		}
 	} else {
 		total_lines = FileManager::FileTotalLines(path);
 	}
@@ -463,7 +480,13 @@ void CLeakpressDlg::WriteResultToFile(CString dir, CString fileName, CString dt,
 	lineString.Append(dt);
 	lineString.Append(", ");
 	lineString.Append(fileName);
-	temp.Format(", %ld, %ld, %ld, %ld, %d\n", r.wLeakPress, r.wLeakValue, r.wTestPress1, r.wTestPress2, r.wTestPress1 - r.wTestPress2);
+	if (isLow) {
+		temp.Format(", %ld, %ld, %ld, %ld, %ld\n", r.wLeakPress, r.wLeakValue, r.wTestPress1, r.wTestPress2, r.wTestPress1 - r.wTestPress2);
+	}
+	else {
+		temp.Format(", %ld, %ld, %ld\n", r.wLeakPress, r.wLeakValue, r.wWorkPress);
+	}
+	
 	lineString.Append(temp);
 
 	FileManager::SaveFile(lineString, path);
@@ -740,7 +763,7 @@ UINT WINAPI Thread1(LPVOID pParam)
 	bool bstart = false;
 	while (!pDlg->m_flagThreadExit)
 	{
-		//pMain->OnTest(id, bstart, false);
+		pMain->OnTest(id, bstart, false);
 	}
 
 	pDlg->m_flagThreadStart = false;
