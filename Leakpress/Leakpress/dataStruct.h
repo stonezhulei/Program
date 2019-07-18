@@ -96,20 +96,24 @@ typedef struct ATEQ_EVENT
 
 typedef struct RESULT
 {
+	UINT ready;
 	UINT wTestStep;
 	UINT wLeakPress;
 	UINT wLeakValue;
 	UINT wTestPress1;
 	UINT wTestPress2;
+	UINT wWorkPress;
 
 	uint8_t fileName[6];
 	void operator = (RESULT r)
 	{
+		ready = r.ready;
 		wTestStep = r.wTestStep;
 		wLeakPress = r.wLeakPress;
 		wLeakValue = r.wLeakValue;
 		wTestPress1 = r.wTestPress1;
 		wTestPress2 = r.wTestPress2;
+		wWorkPress = r.wWorkPress;
 		memcpy(fileName, r.fileName, 6);
 	}
 

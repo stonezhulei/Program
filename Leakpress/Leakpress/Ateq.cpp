@@ -3,6 +3,7 @@
 #include "resource.h"
 #include "LeakpressDlg.h"
 #include "dataStruct.h"
+#include "Util.h"
 
 
 #define NO_VALUE 0
@@ -52,57 +53,42 @@ void Ateq::writeAteqLog(const unsigned char* hexarray, int length)
 
 void Ateq::OnReceive()
 {
-	//unsigned char hexarray[100] = {
-	//	0xFF, 0x03, 0x18, 0x01, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0x00, 0xC2, 0x1A, 0x00, 0x00, 0xF8, 0x2A, 0x00,
-	//	0x00, 0xB8, 0x82, 0x01, 0x00, 0x70, 0x17, 0x00, 0x00, 0x41, 0x26 };
-
-	if(id == 0 || id == 1)
-	{	
-		char str[100];
-		DWORD wCount;
-		bool bReadStat;
-		bReadStat = ReadString(str,100,100);
-		parseHigh(str);
-	}
-	else if(id == 2 || id ==3 || id ==4 )
+	unsigned char hexarray[100] = { 0 }; // 单次最大接收 100 字节
+	unsigned long uReadLength = Read(hexarray, 100, 100);
+	if (uReadLength > 0)
 	{
-		unsigned char hexarray[100] = { 0 }; // 单次最大接收 100 字节
-		unsigned long uReadLength = Read(hexarray, 100, 100);
-		if (uReadLength > 0)
-		{
-			parse(hexarray, uReadLength);
-			writeAteqLog(hexarray, uReadLength);
+		if (id == 0 || id == 1) {
+			parseHigh(hexarray);
 		}
+		else {
+			parse(hexarray, uReadLength);
+		}
+		
+		writeAteqLog(hexarray, uReadLength);
 	}
 }
 
-void Ateq::parseHigh(const char* hexarray)
+void Ateq::parseHigh(const unsigned char* hexarray)
 {
-	vector<string> splitVec = split(hexarray," ");
+	vector<CString> splitVec = Util::SpiltString((char *)hexarray, 0x09);
+	
 
 	LEAK_PARAMETERS leakFrame;
 	memset(&leakFrame, 0, sizeof(LEAK_PARAMETERS));
-	leakFrame.wLeakPress = atoi(splitVec[5].c_str());
-	leakFrame.wLeakValue = atoi(splitVec[9].c_str());
-}
 
-vector<string> Ateq::split(const string &str,const string &pattern)
-{
-	//const char* convert to char*
-	char * strc = new char[strlen(str.c_str())+1];
-	strcpy(strc, str.c_str());
-	vector<string> resultVec;
-	char* tmpStr = strtok(strc, pattern.c_str());
-	while (tmpStr != NULL)
-	{
-		resultVec.push_back(string(tmpStr));
-		tmpStr = strtok(NULL, pattern.c_str());
+	int length = splitVec.size();
+	if (length >= 5) {
+		leakFrame.wLeakValue = (atof)(splitVec[3]) * 1000;
 	}
 
-	delete[] strc;
+	if (length >= 7) {
+		leakFrame.wLeakPress = (atof)(splitVec[5]) * 1000;
+	}
 
-	return resultVec;
+	ATEQ_EVENT *e = new ATEQ_EVENT(id, ATEQ_RESULT_1, leakFrame.wLeakPress, leakFrame.wLeakValue);
+	::PostMessage(mMainWnd->GetSafeHwnd(), WM_USER_EVENT_MSG, 0, (LPARAM)e);
 }
+
 
 void Ateq::parse(const unsigned char* hexarray, int length)
 {
@@ -111,7 +97,6 @@ void Ateq::parse(const unsigned char* hexarray, int length)
 		return;
 	}
 
-	LEAK_PARAMETERS *leakParm;
 	LEAK_PARAMETERS leakFrame;
 	memset(&leakFrame, 0, sizeof(LEAK_PARAMETERS));
 
